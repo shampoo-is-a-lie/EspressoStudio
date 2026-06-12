@@ -125,13 +125,31 @@ opens the plugin's own native editor as a floating window owned by the
 engine process — verified with LSP (VST3) and SWH (LV2). CLAP waits on
 upstream Tracktion hosting support; Windows VSTs via yabridge are Phase 4.
 
+## Phase 4 results (2026-06-12)
+
+The bridge: **Windows VST3 plugins run inside EspressoStudio** via Wine +
+[yabridge](https://github.com/robbert-vdh/yabridge). `scripts/setup-bridge.sh`
+installs Wine and yabridge into the engine container and wires the standard
+Wine VST3 directory; bridged plugins then appear in the plugin browser like
+any other VST3 — verified with Dexed's Windows build, including its full
+editor GUI rendered through Wine.
+
+### Melodyne
+
+Install Melodyne's Windows version into the Wine prefix
+(`toolbox run -c espresso-dev wine 'Melodyne 5 Installer.exe'`), run
+`scripts/setup-bridge.sh` again, rescan, and insert Melodyne on a track.
+**Workflow note:** ARA does not cross the Wine bridge, so Melodyne runs the
+classic way — insert it, play the section through once to *transfer* the
+audio into Melodyne, then edit. Exactly how it worked for its first decade.
+
 ## Roadmap
 
 1. ~~Phase 0 — spike: engine ↔ UI loop, record/play/meters~~ *(done)*
 2. ~~Phase 1 — tracks, mixer, arrange view, WAV/FLAC export~~ *(done)*
 3. ~~Phase 2 — region editing, fades, loop + takes/comping, undo~~ *(done)*
 4. ~~Phase 3 — VST3 / LV2 hosting, FX chains, native plugin editors~~ *(done — automation lanes + CLAP pending)*
-5. Phase 4 — yabridge integration: Windows plugins, Melodyne
+5. ~~Phase 4 — yabridge bridge: Windows VST3s, Melodyne path~~ *(done)*
 6. Phase 4½ — the guitar shelf: built-in **Neural Amp Modeler** (headless
    [NeuralAmpModelerCore](https://github.com/sdatkinson/NeuralAmpModelerCore),
    MIT) as a native engine plugin with its own in-app UI, plus an **impulse

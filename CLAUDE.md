@@ -46,6 +46,10 @@ top of `engine/src/Main.cpp`).
   Plugin editor windows are engine-process native windows (never embedded in
   Electron); the known-plugin list persists via Tracktion's PropertyStorage
   (`~/.config/EspressoStudio/`).
+- Windows VST3s bridge via Wine + yabridge (`scripts/setup-bridge.sh`):
+  yabridge lives in `~/.local/share/yabridge`, shims in `~/.vst3/yabridge`,
+  Windows plugins in the Wine prefix's `Common Files/VST3`. ARA does not
+  cross the bridge (Melodyne = transfer workflow). Verified with Dexed.
 - Session/recording scratch data goes in `session/`, renders in `exports/`
   (both gitignored). `spike-session/` is the retired Phase 0 scratch dir.
 - The renderer state layer is `app/src/renderer/src/stores.js` — components
