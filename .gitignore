@@ -4,5 +4,7 @@ out/
 engine/build/
 engine/libs/tracktion_engine/
 spike-session/
+session/
+exports/
 *.AppImage
 .DS_Store
