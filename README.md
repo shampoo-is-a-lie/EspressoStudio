@@ -51,8 +51,10 @@ meters to a Svelte transport UI at 30 Hz.
 
 ```bash
 # once: create the container and install deps
-toolbox create espresso-dev
-toolbox run -c espresso-dev sudo dnf install -y cmake gcc-c++ git \
+# (-r <release>: MUST match your host's PipeWire generation — a mismatched
+#  pipewire-jack client spins empty callbacks and gets silently SIGKILLed)
+toolbox create -y -r 44 espresso-dev
+toolbox run -c espresso-dev sudo dnf install -y cmake gcc-c++ git libatomic \
     alsa-lib-devel pipewire-jack-audio-connection-kit-devel ladspa-devel \
     libcurl-devel freetype-devel fontconfig-devel libX11-devel \
     libXcomposite-devel libXcursor-devel libXext-devel libXinerama-devel \
@@ -63,9 +65,16 @@ git -c url."https://github.com/".insteadOf="git@github.com:" \
     clone --depth 1 --recurse-submodules --shallow-submodules \
     https://github.com/Tracktion/tracktion_engine.git engine/libs/tracktion_engine
 
+# two one-character patches for GCC 16 / new libstdc++ (see CLAUDE.md):
+#   nanorange.hpp ~17108:  y.value  →  y.value_
+#   choc_SampleBuffers.h:  add  #include <cstdint>
+
 # build
 toolbox run -c espresso-dev bash -c \
     'cd engine && cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j$(nproc)'
+
+# run it (daemonizes inside the container)
+bash scripts/engine-ctl.sh start   # also: stop / status / log
 ```
 
 ### Run the app (on the host)
@@ -77,9 +86,20 @@ cd app && npm install && npm run dev
 The Electron app spawns the engine via `toolbox run` automatically (override
 with `ESPRESSO_ENGINE_CMD=/path/to/EspressoEngine`).
 
+## Phase 0 results (2026-06-12)
+
+Verified end-to-end on Bazzite (Fedora 44, PipeWire 1.6.4):
+
+- JACK-via-PipeWire device at **48 kHz / 128 samples / 2.0 ms output latency**,
+  audio threads at realtime priority (rtkit)
+- record → per-track takes (`Track 1_Take_1.wav`…), stop, playback with live
+  meters streaming to the UI at 30 Hz
+- Electron UI links to the engine, shows device/SR/buffer/latency, drives
+  transport
+
 ## Roadmap
 
-1. ~~Phase 0 — spike: engine ↔ UI loop, record/play/meters~~ *(you are here)*
+1. ~~Phase 0 — spike: engine ↔ UI loop, record/play/meters~~ *(done)*
 2. Phase 1 — tracks, takes & comping, mixer, save/load, WAV/FLAC export
 3. Phase 2 — region editing, fades, automation
 4. Phase 3 — VST3 / LV2 / CLAP hosting

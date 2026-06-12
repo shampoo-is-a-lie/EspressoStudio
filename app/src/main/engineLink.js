@@ -9,7 +9,7 @@ const ENGINE_HOST = '127.0.0.1'
 // so by default we launch it through `toolbox run`. Override with
 // ESPRESSO_ENGINE_CMD to run a host-native binary directly.
 const DEFAULT_ENGINE_CMD = process.env.ESPRESSO_ENGINE_CMD
-  || 'toolbox run -c espresso-dev ./engine/build/EspressoEngine'
+  || 'bash scripts/engine-ctl.sh start'
 
 export class EngineLink extends EventEmitter {
   constructor (repoRoot) {

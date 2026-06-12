@@ -9,13 +9,26 @@ top of `engine/src/Main.cpp`).
 
 - Host is Bazzite (Fedora ostree) — **the engine must be built and run inside
   the `espresso-dev` toolbox container**; deps are listed in README.md.
+  - The container's Fedora release MUST match the host's PipeWire generation
+    (`toolbox create -y -r 44`). A mismatched pipewire-jack client (F42 libs vs
+    F44 server) spins millions of empty process callbacks/sec: the transport
+    freezes at position 0 and rtkit's ~200ms RLIMIT_RTTIME budget is overrun,
+    which is a *silent kernel SIGKILL* ~2s after startup. Cost us hours.
   - Build: `toolbox run -c espresso-dev bash -c 'cd engine && cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j$(nproc)'`
   - Binary lands at `engine/build/EspressoEngine` (post-build copy).
+- Start/stop the engine ONLY via `scripts/engine-ctl.sh {start|stop|status|log}`.
+  It daemonizes inside the container (setsid+nohup, spawning session exits
+  immediately) — anything else gets reaped by podman exec teardown.
 - The app runs on the host: `cd app && npm run dev`. Its main process
-  auto-spawns the engine through `toolbox run` (see `app/src/main/engineLink.js`).
+  auto-spawns the engine through `engine-ctl.sh` (see `app/src/main/engineLink.js`).
 - `engine/libs/tracktion_engine` is a plain shallow clone, gitignored (not a
   submodule — upstream's JUCE submodule URL is SSH-only, needs the
   `url.insteadOf` rewrite from README.md).
+- Local patches needed after a fresh Tracktion clone (GCC 16 / new libstdc++):
+  - `modules/3rd_party/nanorange/nanorange.hpp` ~line 17108: `y.value` →
+    `y.value_` (uninstantiated-template-body error, `-Wtemplate-body`).
+  - `modules/3rd_party/choc/audio/choc_SampleBuffers.h`: add
+    `#include <cstdint>` to the include block.
 
 ## Conventions
 

@@ -11,6 +11,8 @@
 
 #include <JuceHeader.h>
 
+#include <sys/resource.h>
+
 namespace te = tracktion;
 
 static constexpr int kControlPort = 7177;
@@ -87,6 +89,13 @@ private:
 
         while (! threadShouldExit())
         {
+            const int ready = c.waitUntilReady (true, 200);
+
+            if (ready < 0)
+                break;
+            if (ready == 0)
+                continue;
+
             const int n = c.read (buffer, (int) sizeof (buffer) - 1, false);
 
             if (n <= 0)
@@ -120,11 +129,35 @@ private:
 };
 
 //==============================================================================
+// rtkit promotes our audio threads with a hard ~200ms RLIMIT_RTTIME budget;
+// overrunning it is a silent kernel SIGKILL. So: no spin-waiting, and render
+// the graph on the audio thread alone until proper realtime limits
+// (limits.d rtprio) make spinning safe.
+struct EspressoEngineBehaviour : public te::EngineBehaviour
+{
+    int getNumberOfCPUsToUseForAudio() override   { return 1; }
+};
+
+//==============================================================================
+// Diagnostic: proves whether the device layer is delivering audio callbacks.
+struct CallbackCounter : public juce::AudioIODeviceCallback
+{
+    std::atomic<long> count { 0 };
+
+    void audioDeviceIOCallbackWithContext (const float* const*, int, float* const*, int, int,
+                                           const juce::AudioIODeviceCallbackContext&) override   { ++count; }
+    void audioDeviceAboutToStart (juce::AudioIODevice*) override {}
+    void audioDeviceStopped() override {}
+};
+
+//==============================================================================
 class EspressoApp : private juce::Timer
 {
 public:
     bool initialise()
     {
+        te::EditPlaybackContext::setThreadPoolStrategy (
+            static_cast<int> (tracktion::graph::ThreadPoolStrategy::conditionVariable));
         auto& dm = engine.getDeviceManager();
 
         // Prefer JUCE's JACK device type: on a PipeWire system this connects
@@ -146,7 +179,24 @@ public:
             return false;
         }
 
+        // PipeWire's rt module acquires realtime priority through rtkit, which
+        // caps RLIMIT_RTTIME at ~200ms of RT CPU — exceeding it is a silent
+        // kernel SIGKILL. The graph render can busy-wait past that, so lift
+        // the cap now that the promotion has already happened.
+        {
+            const rlimit unlimited { RLIM_INFINITY, RLIM_INFINITY };
+            setrlimit (RLIMIT_RTTIME, &unlimited);
+        }
+
+        // The wave device list is rebuilt asynchronously after the device
+        // opens — wait for the inputs to appear before wiring up the edit.
+        for (auto deadline = juce::Time::getMillisecondCounter() + 3000;
+             dm.getNumWaveInDevices() == 0 && juce::Time::getMillisecondCounter() < deadline;)
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
+
         openEdit();
+
+        engine.getDeviceManager().deviceManager.addAudioCallback (&callbackCounter);
 
         server.onCommand = [this] (juce::var v) { handleCommand (v); };
         server.onConnect = [this] { sendHello(); };
@@ -183,18 +233,27 @@ private:
         {
             if (auto* wip = dm.getWaveInDevice (i))
             {
+                // PipeWire exposes the outputs back as monitor_* capture
+                // ports — recording those would create a feedback loop.
+                const bool isMonitorPort = wip->getName().containsIgnoreCase ("monitor");
                 wip->setMonitorMode (te::InputDevice::MonitorMode::automatic);
-                wip->setEnabled (true);
+                wip->setEnabled (! isMonitorPort);
             }
         }
 
         edit->getTransport().ensureContextAllocated();
 
         // Route each mono wave input onto its own track, armed and ready.
+        // Spike: cap at 2 — some fallback devices report hundreds of channels.
+        constexpr int maxArmedTracks = 2;
         int trackNum = 0;
         for (auto instance : edit->getAllInputDevices())
         {
-            if (instance->getInputDevice().getDeviceType() == te::InputDevice::waveDevice)
+            if (trackNum >= maxArmedTracks)
+                break;
+
+            if (instance->getInputDevice().getDeviceType() == te::InputDevice::waveDevice
+                 && instance->getInputDevice().isEnabled())
             {
                 edit->ensureNumberOfAudioTracks (trackNum + 1);
 
@@ -269,7 +328,10 @@ private:
         o->setProperty ("device", dev->getTypeName() + ": " + dev->getName());
         o->setProperty ("sampleRate", dev->getCurrentSampleRate());
         o->setProperty ("bufferSize", dev->getCurrentBufferSizeSamples());
-        o->setProperty ("latencyMs", dm.getOutputLatencySeconds() * 1000.0);
+        auto latencySecs = dm.getOutputLatencySeconds();
+        if (latencySecs <= 0.0)  // pipewire-jack reports 0; estimate one period
+            latencySecs = dev->getCurrentBufferSizeSamples() / dev->getCurrentSampleRate();
+        o->setProperty ("latencyMs", latencySecs * 1000.0);
         server.broadcast (juce::JSON::toString (juce::var (o), true) + "\n");
     }
 
@@ -287,6 +349,7 @@ private:
         o->setProperty ("position", transport.getPosition().inSeconds());
         o->setProperty ("levelL", juce::Decibels::decibelsToGain (dbL, -100.0f));
         o->setProperty ("levelR", juce::Decibels::decibelsToGain (dbR, -100.0f));
+        o->setProperty ("callbacks", (juce::int64) callbackCounter.count.load());
         server.broadcast (juce::JSON::toString (juce::var (o), true) + "\n");
     }
 
@@ -306,15 +369,21 @@ private:
         }
     }
 
-    te::Engine engine { "EspressoStudio" };
+    te::Engine engine { std::make_unique<te::PropertyStorage> ("EspressoStudio"),
+                        nullptr,
+                        std::make_unique<EspressoEngineBehaviour>() };
     std::unique_ptr<te::Edit> edit;
     te::LevelMeasurer::Client meterClient;
+    CallbackCounter callbackCounter;
     ControlServer server;
 };
 
 //==============================================================================
 int main()
 {
+    // Ask PipeWire for a pro-audio quantum (overridable from the environment).
+    setenv ("PIPEWIRE_LATENCY", "128/48000", /*overwrite*/ 0);
+
     juce::ScopedJuceInitialiser_GUI juceInit;
 
     EspressoApp app;
