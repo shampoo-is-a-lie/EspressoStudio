@@ -9,6 +9,7 @@
   let sampleRate = 0
   let bufferSize = 0
   let latencyMs = 0
+  let systemLatencyMs = 0
   let takes = []
   let logLines = []
 
@@ -19,6 +20,7 @@
       sampleRate = ev.sampleRate
       bufferSize = ev.bufferSize
       latencyMs = ev.latencyMs
+      systemLatencyMs = ev.systemLatencyMs || ev.latencyMs
     } else if (ev.event === 'takes') {
       takes = ev.tracks
     } else if (ev.event === 'state') {
@@ -64,7 +66,8 @@
         <span>{device}</span>
         <span>{sampleRate ? `${sampleRate / 1000} kHz` : '—'}</span>
         <span>{bufferSize ? `${bufferSize} smp` : '—'}</span>
-        <span class="latency">{latencyMs ? `${latencyMs.toFixed(1)} ms` : '—'}</span>
+        <span class="latency">{latencyMs ? `app ${latencyMs.toFixed(1)} ms` : '—'}</span>
+        <span class="latency sys">{systemLatencyMs ? `sys ${systemLatencyMs.toFixed(1)} ms` : ''}</span>
       </div>
     </div>
 
@@ -156,6 +159,7 @@
     color: #5d8a6b;
   }
   .latency { color: #d4a373; }
+  .latency.sys { color: #8a7355; }
 
   .transport { display: flex; gap: 10px; }
   .tbtn {

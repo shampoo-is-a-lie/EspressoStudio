@@ -104,7 +104,12 @@ Verified end-to-end on Bazzite (Fedora 44, PipeWire 1.6.4):
 3. Phase 2 — region editing, fades, automation
 4. Phase 3 — VST3 / LV2 / CLAP hosting
 5. Phase 4 — yabridge integration: Windows plugins, Melodyne
-6. Phase 5 — the crema: Logic-grade polish, AppImage
+6. Phase 4½ — the guitar shelf: built-in **Neural Amp Modeler** (headless
+   [NeuralAmpModelerCore](https://github.com/sdatkinson/NeuralAmpModelerCore),
+   MIT) as a native engine plugin with its own in-app UI, plus an **impulse
+   response loader** (cab sims via convolution) — no external plugin needed
+   to track guitar
+7. Phase 5 — the crema: Logic-grade polish, AppImage
 
 ## License
 

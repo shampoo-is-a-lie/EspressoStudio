@@ -337,10 +337,14 @@ private:
         o->setProperty ("device", dev->getTypeName() + ": " + dev->getName());
         o->setProperty ("sampleRate", dev->getCurrentSampleRate());
         o->setProperty ("bufferSize", dev->getCurrentBufferSizeSamples());
-        auto latencySecs = dm.getOutputLatencySeconds();
-        if (latencySecs <= 0.0)  // pipewire-jack reports 0; estimate one period
-            latencySecs = dev->getCurrentBufferSizeSamples() / dev->getCurrentSampleRate();
-        o->setProperty ("latencyMs", latencySecs * 1000.0);
+        // App latency: one period at our (pinned) buffer size. System latency:
+        // whatever the device layer reports downstream of us.
+        const auto periodMs = 1000.0 * dev->getCurrentBufferSizeSamples() / dev->getCurrentSampleRate();
+        auto systemMs = dm.getOutputLatencySeconds() * 1000.0;
+        if (systemMs <= 0.0)
+            systemMs = periodMs;
+        o->setProperty ("latencyMs", periodMs);
+        o->setProperty ("systemLatencyMs", systemMs);
         server.broadcast (juce::JSON::toString (juce::var (o), true) + "\n");
 
         sendTakesInfo();
@@ -420,8 +424,11 @@ private:
 //==============================================================================
 int main()
 {
-    // Ask PipeWire for a pro-audio quantum (overridable from the environment).
+    // Ask PipeWire for a pro-audio quantum (overridable from the environment),
+    // and pin it: force-quantum holds the graph at our buffer size while the
+    // engine runs, so other desktop apps can't raise our latency mid-session.
     setenv ("PIPEWIRE_LATENCY", "128/48000", /*overwrite*/ 0);
+    setenv ("PIPEWIRE_PROPS", "{ node.force-quantum = 128 }", /*overwrite*/ 0);
 
     juce::ScopedJuceInitialiser_GUI juceInit;
 
