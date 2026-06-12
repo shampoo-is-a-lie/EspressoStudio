@@ -1,0 +1,47 @@
+import { writable, get } from 'svelte/store'
+
+export const linkUp = writable(false)
+export const hello = writable(null)
+export const transport = writable({ playing: false, recording: false, position: 0, levelL: 0, levelR: 0 })
+export const tracks = writable([])
+export const editLength = writable(0)
+export const peaks = writable({}) // clipId -> { pps, data }
+export const exportResult = writable(null)
+export const logLines = writable([])
+
+export const send = (msg) => window.espresso.send(msg)
+
+let started = false
+
+export function initEngineBridge () {
+  if (started) return
+  started = true
+
+  window.espresso.onLink(({ up }) => linkUp.set(up))
+  window.espresso.onLog((line) => logLines.update(l => [...l.slice(-100), line]))
+
+  window.espresso.onEvent((ev) => {
+    if (ev.event === 'hello') {
+      hello.set(ev)
+    } else if (ev.event === 'state') {
+      transport.set({
+        playing: ev.playing,
+        recording: ev.recording,
+        position: ev.position,
+        levelL: ev.levelL,
+        levelR: ev.levelR
+      })
+    } else if (ev.event === 'tracks') {
+      tracks.set(ev.tracks)
+      editLength.set(ev.editLength)
+      const have = get(peaks)
+      ev.tracks.forEach((t, ti) => t.clips.forEach((c, ci) => {
+        if (!have[c.id]) send({ cmd: 'peaks', track: ti, clip: ci })
+      }))
+    } else if (ev.event === 'peaks') {
+      peaks.update(p => ({ ...p, [ev.id]: { pps: ev.peaksPerSecond, data: ev.data } }))
+    } else if (ev.event === 'exported') {
+      exportResult.set(ev)
+    }
+  })
+}

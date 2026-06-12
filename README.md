@@ -97,11 +97,20 @@ Verified end-to-end on Bazzite (Fedora 44, PipeWire 1.6.4):
 - Electron UI links to the engine, shows device/SR/buffer/latency, drives
   transport
 
+## Phase 1 results (2026-06-12)
+
+The arrange era begins: track headers with **record-arm / mute / solo /
+volume / pan**, add & remove tracks, a canvas **arrange view** with ruler,
+grid, waveform clips, take badges, click-to-seek and zoom, and **WAV/FLAC
+export** (24-bit) from the transport bar. The engine speaks protocol v1
+(documented at the top of `engine/src/Main.cpp`) and serves multiple
+control clients at once.
+
 ## Roadmap
 
 1. ~~Phase 0 — spike: engine ↔ UI loop, record/play/meters~~ *(done)*
-2. Phase 1 — tracks, takes & comping, mixer, save/load, WAV/FLAC export
-3. Phase 2 — region editing, fades, automation
+2. ~~Phase 1 — tracks, mixer, arrange view, WAV/FLAC export~~ *(done — comping UI moved to Phase 2)*
+3. Phase 2 — region editing (move/trim/split), fades, take comping, automation
 4. Phase 3 — VST3 / LV2 / CLAP hosting
 5. Phase 4 — yabridge integration: Windows plugins, Melodyne
 6. Phase 4½ — the guitar shelf: built-in **Neural Amp Modeler** (headless

@@ -39,4 +39,9 @@ top of `engine/src/Main.cpp`).
   `examples/common/Utilities.h`) — the API moves; the pinned commit is truth.
 - JUCE code style in `engine/` follows JUCE conventions (spaces before parens);
   app code follows the OAKANIZER style (2-space, no semicolons omitted).
-- Session/recording scratch data goes in `spike-session/` (gitignored).
+- Session/recording scratch data goes in `session/`, renders in `exports/`
+  (both gitignored). `spike-session/` is the retired Phase 0 scratch dir.
+- The renderer state layer is `app/src/renderer/src/stores.js` — components
+  never talk to the socket directly; they read stores and call `send()`.
+  The engine is authoritative: commands don't update UI state optimistically,
+  the resulting `tracks` event does.
