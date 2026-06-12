@@ -1,0 +1,20 @@
+{
+  "name": "espressostudio",
+  "version": "0.1.0",
+  "description": "EspressoStudio — a DAW for Linux, brewed beautiful. Electron UI for the espresso-engine.",
+  "main": "out/main/index.js",
+  "license": "GPL-3.0",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^3.1.0",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "electron-vite": "^2.3.0",
+    "svelte": "^4.2.18",
+    "vite": "^5.3.1"
+  }
+}
