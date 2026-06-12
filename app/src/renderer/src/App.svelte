@@ -3,6 +3,7 @@
   import TransportBar from './components/TransportBar.svelte'
   import TrackList from './components/TrackList.svelte'
   import Arrange from './components/Arrange.svelte'
+  import FxPanel from './components/FxPanel.svelte'
 
   initEngineBridge()
 </script>
@@ -12,6 +13,7 @@
   <div class="workspace">
     <TrackList />
     <Arrange />
+    <FxPanel />
   </div>
 </main>
 

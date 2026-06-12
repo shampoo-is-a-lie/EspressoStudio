@@ -39,6 +39,13 @@ top of `engine/src/Main.cpp`).
   `examples/common/Utilities.h`) — the API moves; the pinned commit is truth.
 - JUCE code style in `engine/` follows JUCE conventions (spaces before parens);
   app code follows the OAKANIZER style (2-space, no semicolons omitted).
+- Plugin scanning is in-process (a crashing plugin kills the engine —
+  out-of-process scanning is future work). JUCE's default Linux search paths
+  miss Fedora's `/usr/lib64/{vst3,lv2}`; the engine adds them explicitly.
+  Test plugins live in the container: `lsp-plugins-vst3`, `lv2-swh-plugins`.
+  Plugin editor windows are engine-process native windows (never embedded in
+  Electron); the known-plugin list persists via Tracktion's PropertyStorage
+  (`~/.config/EspressoStudio/`).
 - Session/recording scratch data goes in `session/`, renders in `exports/`
   (both gitignored). `spike-session/` is the retired Phase 0 scratch dir.
 - The renderer state layer is `app/src/renderer/src/stores.js` — components

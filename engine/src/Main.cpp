@@ -20,6 +20,10 @@
                 {"cmd":"setFades","track":i,"clip":j,"fadeIn":sec,"fadeOut":sec}
                 {"cmd":"setTake","track":i,"clip":j,"take":n}
                 {"cmd":"undo"} {"cmd":"redo"}
+    Plugins(v3):{"cmd":"scanPlugins"} {"cmd":"addPlugin","track":i,"ident":s}
+                {"cmd":"removePlugin","track":i,"plugin":j}
+                {"cmd":"setPluginEnabled","track":i,"plugin":j,"on":b}
+                {"cmd":"showPluginEditor","track":i,"plugin":j}
     Data:       {"cmd":"peaks","track":i,"clip":j}
                 {"cmd":"export","format":"wav"|"flac","bitDepth":16|24|32}
     Events out: hello (on connect), state (~30 Hz), tracks (on connect and
@@ -206,6 +210,37 @@ struct CallbackCounter : public juce::AudioIODeviceCallback
                                            const juce::AudioIODeviceCallbackContext&) override   { ++count; }
     void audioDeviceAboutToStart (juce::AudioIODevice*) override {}
     void audioDeviceStopped() override {}
+};
+
+//==============================================================================
+// Native floating window for an external plugin's editor. Plugin GUIs live in
+// the engine process (they can't be embedded into Electron).
+class PluginEditorWindow : public juce::DocumentWindow
+{
+public:
+    explicit PluginEditorWindow (te::ExternalPlugin& p)
+        : juce::DocumentWindow (p.getName(), juce::Colours::black, juce::DocumentWindow::closeButton),
+          plugin (p)
+    {
+        setUsingNativeTitleBar (true);
+
+        if (auto* inst = p.getAudioPluginInstance())
+        {
+            if (auto* ed = inst->createEditorIfNeeded())
+                setContentOwned (ed, true);
+            else
+                setContentOwned (new juce::GenericAudioProcessorEditor (*inst), true);
+        }
+
+        setResizable (true, false);
+        centreWithSize (juce::jmax (360, getWidth()), juce::jmax (240, getHeight()));
+        setVisible (true);
+        toFront (true);
+    }
+
+    void closeButtonPressed() override   { setVisible (false); }
+
+    te::ExternalPlugin& plugin;
 };
 
 //==============================================================================
@@ -517,6 +552,46 @@ private:
             edit->getUndoManager().redo();
             saveAndSendTracks();
         }
+        else if (cmd == "scanPlugins")
+        {
+            scanPlugins();
+        }
+        else if (cmd == "addPlugin")
+        {
+            addPlugin (v);
+        }
+        else if (cmd == "removePlugin")
+        {
+            if (auto* p = getTrackPlugin (v))
+            {
+                closeEditorsFor (p);
+                p->deleteFromParent();
+            }
+            saveAndSendTracks();
+        }
+        else if (cmd == "setPluginEnabled")
+        {
+            if (auto* p = getTrackPlugin (v))
+                p->setEnabled ((bool) v.getProperty ("on", true));
+            saveAndSendTracks();
+        }
+        else if (cmd == "showPluginEditor")
+        {
+            if (auto* ep = dynamic_cast<te::ExternalPlugin*> (getTrackPlugin (v)))
+            {
+                for (auto* w : editorWindows)
+                {
+                    if (&w->plugin == ep)
+                    {
+                        w->setVisible (true);
+                        w->toFront (true);
+                        return;
+                    }
+                }
+
+                editorWindows.add (new PluginEditorWindow (*ep));
+            }
+        }
         else if (cmd == "peaks")
         {
             sendPeaks (trackIndex, (int) v.getProperty ("clip", -1));
@@ -561,6 +636,7 @@ private:
         server.broadcast (juce::JSON::toString (juce::var (o), true) + "\n");
 
         sendTracks();
+        sendKnownPlugins();
     }
 
     te::Clip* getClip (const juce::var& v)
@@ -581,6 +657,128 @@ private:
     {
         te::EditFileOperations (*edit).save (true, true, false);
         sendTracks();
+    }
+
+    te::Plugin* getTrackPlugin (const juce::var& v)
+    {
+        auto tracks = te::getAudioTracks (*edit);
+        const auto ti = (int) v.getProperty ("track", -1);
+
+        if (! juce::isPositiveAndBelow (ti, tracks.size()))
+            return nullptr;
+
+        int i = 0;
+        const auto pi = (int) v.getProperty ("plugin", -1);
+
+        for (auto p : tracks[ti]->pluginList)
+            if (i++ == pi)
+                return p;
+
+        return nullptr;
+    }
+
+    void closeEditorsFor (te::Plugin* p)
+    {
+        for (int i = editorWindows.size(); --i >= 0;)
+            if (&editorWindows[i]->plugin == p)
+                editorWindows.remove (i);
+    }
+
+    void scanPlugins()
+    {
+        if (scanning.exchange (true))
+            return;
+
+        sendKnownPlugins(); // lets the UI show "scanning…"
+
+        juce::Thread::launch ([this]
+        {
+            auto& pm = engine.getPluginManager();
+
+            for (auto* format : pm.pluginFormatManager.getFormats())
+            {
+                const auto fn = format->getName();
+
+                if (fn != "VST3" && fn != "LV2")
+                    continue;
+
+                auto paths = format->getDefaultLocationsToSearch();
+
+                // JUCE's defaults miss Fedora's lib64 plugin dirs
+                if (fn == "VST3")
+                    paths.add (juce::File ("/usr/lib64/vst3"));
+                else if (fn == "LV2")
+                    paths.add (juce::File ("/usr/lib64/lv2"));
+
+                juce::PluginDirectoryScanner scanner (pm.knownPluginList, *format,
+                                                      paths, true, juce::File());
+                juce::String currentName;
+                while (scanner.scanNextFile (true, currentName))
+                {}
+            }
+
+            scanning = false;
+            juce::MessageManager::callAsync ([this] { sendKnownPlugins(); });
+        });
+    }
+
+    void sendKnownPlugins()
+    {
+        juce::Array<juce::var> arr;
+
+        for (const auto& d : engine.getPluginManager().knownPluginList.getTypes())
+        {
+            auto* o = new juce::DynamicObject();
+            o->setProperty ("ident", d.createIdentifierString());
+            o->setProperty ("name", d.name);
+            o->setProperty ("format", d.pluginFormatName);
+            o->setProperty ("category", d.category);
+            o->setProperty ("instrument", d.isInstrument);
+            arr.add (juce::var (o));
+        }
+
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("event", "knownPlugins");
+        o->setProperty ("scanning", scanning.load());
+        o->setProperty ("plugins", arr);
+        server.broadcast (juce::JSON::toString (juce::var (o), true) + "\n");
+    }
+
+    void addPlugin (const juce::var& v)
+    {
+        const auto ident = v.getProperty ("ident", "").toString();
+        auto tracks = te::getAudioTracks (*edit);
+        const auto ti = (int) v.getProperty ("track", -1);
+
+        if (juce::isPositiveAndBelow (ti, tracks.size()))
+        {
+            for (const auto& d : engine.getPluginManager().knownPluginList.getTypes())
+            {
+                if (d.createIdentifierString() == ident)
+                {
+                    if (auto plugin = edit->getPluginCache().createNewPlugin (te::ExternalPlugin::xmlTypeName, d))
+                    {
+                        // insert before the built-in volume/meter tail
+                        auto& list = tracks[ti]->pluginList;
+                        int idx = 0;
+
+                        for (auto p : list)
+                        {
+                            if (dynamic_cast<te::VolumeAndPanPlugin*> (p) != nullptr
+                                 || dynamic_cast<te::LevelMeterPlugin*> (p) != nullptr)
+                                break;
+                            ++idx;
+                        }
+
+                        list.insertPlugin (plugin, idx, nullptr);
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        saveAndSendTracks();
     }
 
     void sendTracks()
@@ -628,8 +826,20 @@ private:
                 clips.add (juce::var (co));
             }
 
+            juce::Array<juce::var> plugins;
+
+            for (auto p : t->pluginList)
+            {
+                auto* po = new juce::DynamicObject();
+                po->setProperty ("name", p->getName());
+                po->setProperty ("enabled", p->isEnabled());
+                po->setProperty ("external", dynamic_cast<te::ExternalPlugin*> (p) != nullptr);
+                plugins.add (juce::var (po));
+            }
+
             auto* to = new juce::DynamicObject();
             to->setProperty ("name", t->getName());
+            to->setProperty ("plugins", plugins);
             to->setProperty ("armed", isTrackArmed (*t));
             to->setProperty ("mute", t->isMuted (false));
             to->setProperty ("solo", t->isSolo (false));
@@ -777,6 +987,8 @@ private:
     CallbackCounter callbackCounter;
     juce::WavAudioFormat wavFormat;
     juce::FlacAudioFormat flacFormat;
+    juce::OwnedArray<PluginEditorWindow> editorWindows;
+    std::atomic<bool> scanning { false };
     ControlServer server;
 };
 

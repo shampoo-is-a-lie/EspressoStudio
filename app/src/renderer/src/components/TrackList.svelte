@@ -1,5 +1,5 @@
 <script>
-  import { tracks, send } from '../stores.js'
+  import { tracks, fxTrack, send } from '../stores.js'
 
   export const ROW = 72
 </script>
@@ -16,6 +16,8 @@
         <button class="tgl arm" class:on={t.armed} title="Record arm" on:click={() => send({ cmd: 'arm', track: i, on: !t.armed })}>R</button>
         <button class="tgl mute" class:on={t.mute} title="Mute" on:click={() => send({ cmd: 'mute', track: i, on: !t.mute })}>M</button>
         <button class="tgl solo" class:on={t.solo} title="Solo" on:click={() => send({ cmd: 'solo', track: i, on: !t.solo })}>S</button>
+        <button class="tgl fx" class:on={$fxTrack === i || (t.plugins ?? []).some(p => p.external)}
+                title="FX chain" on:click={() => fxTrack.set($fxTrack === i ? null : i)}>fx</button>
         <input class="pan" type="range" min="-1" max="1" step="0.05" title="Pan"
                value={t.pan ?? 0} on:input={(e) => send({ cmd: 'pan', track: i, value: +e.target.value })} />
       </div>
@@ -74,6 +76,8 @@
   .tgl.arm.on { background: #6e2420; border-color: #a03830; color: #ff7a6e; }
   .tgl.mute.on { background: #5c4a16; border-color: #8a702a; color: #e8c468; }
   .tgl.solo.on { background: #1f4a52; border-color: #2e6e7a; color: #6ecbdc; }
+  .tgl.fx { width: 24px; font-size: 8px; }
+  .tgl.fx.on { background: #4a3a1f; border-color: #8a702a; color: #e8c468; }
   .pan { flex: 1; height: 14px; accent-color: #8a8a92; }
 
   .row3 { display: flex; align-items: center; gap: 6px; }

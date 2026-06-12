@@ -132,9 +132,11 @@
     if (Math.abs(mx - drag.startMx) > 3) drag.moved = true
 
     if (drag.mode === 'loop') {
+      // keep the preview on the drag object — the 30Hz state events
+      // overwrite the loopStart/loopEnd mirrors mid-drag otherwise
       const a = Math.max(0, snap(drag.startMx / pxPerSec, e))
       const b = Math.max(0, snap(mx / pxPerSec, e))
-      loopStart = Math.min(a, b); loopEnd = Math.max(a, b); looping = true
+      drag.a = Math.min(a, b); drag.b = Math.max(a, b)
       return
     }
 
@@ -162,8 +164,8 @@
     drag = null
 
     if (d.mode === 'loop') {
-      if (d.moved && loopEnd - loopStart > 0.05) {
-        send({ cmd: 'setLoop', start: loopStart, end: loopEnd, on: true })
+      if (d.moved && d.b - d.a > 0.05) {
+        send({ cmd: 'setLoop', start: d.a, end: d.b, on: true })
       } else {
         send({ cmd: 'setLoop', start: 0, end: 0, on: false })
         send({ cmd: 'seek', seconds: Math.max(0, snap(d.startMx / pxPerSec, e)) })
@@ -328,10 +330,13 @@
       }
     }
 
-    // loop brace on the ruler
-    if (looping && loopEnd > loopStart) {
-      const lx = loopStart * pxPerSec
-      const lw = (loopEnd - loopStart) * pxPerSec
+    // loop brace on the ruler (drag preview takes precedence)
+    const inLoopDrag = drag && drag.mode === 'loop' && drag.moved
+    const ls = inLoopDrag ? drag.a : loopStart
+    const le = inLoopDrag ? drag.b : loopEnd
+    if ((looping || inLoopDrag) && le > ls) {
+      const lx = ls * pxPerSec
+      const lw = (le - ls) * pxPerSec
       ctx.fillStyle = 'rgba(232, 196, 104, 0.25)'
       ctx.fillRect(lx, 0, lw, RULER - 1)
       ctx.fillStyle = '#e8c468'

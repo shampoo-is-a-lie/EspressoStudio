@@ -115,12 +115,22 @@ rendering, **loop ranges** drawn on the ruler (drag to set), **loop
 recording stacks takes** with a click-to-cycle take badge (comping v1), and
 full **undo/redo** (↶↷ / Ctrl+Z). Keyboard: Space = play/stop, R = record.
 
+## Phase 3 results (2026-06-12)
+
+The plugin era: the engine scans **VST3 and LV2** plugins (including
+Fedora's `/usr/lib64` dirs, which JUCE's defaults miss) and hosts them on
+track chains. Each track header has an **fx** button opening a chain panel:
+searchable plugin browser, add/remove, bypass, and a **ui** button that
+opens the plugin's own native editor as a floating window owned by the
+engine process — verified with LSP (VST3) and SWH (LV2). CLAP waits on
+upstream Tracktion hosting support; Windows VSTs via yabridge are Phase 4.
+
 ## Roadmap
 
 1. ~~Phase 0 — spike: engine ↔ UI loop, record/play/meters~~ *(done)*
 2. ~~Phase 1 — tracks, mixer, arrange view, WAV/FLAC export~~ *(done)*
-3. ~~Phase 2 — region editing, fades, loop + takes/comping, undo~~ *(done — automation lanes deferred)*
-4. Phase 3 — VST3 / LV2 / CLAP hosting, automation lanes
+3. ~~Phase 2 — region editing, fades, loop + takes/comping, undo~~ *(done)*
+4. ~~Phase 3 — VST3 / LV2 hosting, FX chains, native plugin editors~~ *(done — automation lanes + CLAP pending)*
 5. Phase 4 — yabridge integration: Windows plugins, Melodyne
 6. Phase 4½ — the guitar shelf: built-in **Neural Amp Modeler** (headless
    [NeuralAmpModelerCore](https://github.com/sdatkinson/NeuralAmpModelerCore),

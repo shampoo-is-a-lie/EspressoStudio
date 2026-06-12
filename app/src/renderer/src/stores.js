@@ -9,6 +9,8 @@ export const peaks = writable({}) // clipId -> { pps, data }
 export const exportResult = writable(null)
 export const logLines = writable([])
 export const selection = writable(null) // { track, clip, id } or null
+export const knownPlugins = writable({ scanning: false, plugins: [] })
+export const fxTrack = writable(null) // track index whose FX panel is open
 
 export const send = (msg) => window.espresso.send(msg)
 
@@ -55,6 +57,8 @@ export function initEngineBridge () {
       peaks.update(p => ({ ...p, [ev.id]: { pps: ev.peaksPerSecond, data: ev.data } }))
     } else if (ev.event === 'exported') {
       exportResult.set(ev)
+    } else if (ev.event === 'knownPlugins') {
+      knownPlugins.set({ scanning: ev.scanning, plugins: ev.plugins })
     }
   })
 }
