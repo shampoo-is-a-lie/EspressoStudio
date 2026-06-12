@@ -2,12 +2,13 @@ import { writable, get } from 'svelte/store'
 
 export const linkUp = writable(false)
 export const hello = writable(null)
-export const transport = writable({ playing: false, recording: false, position: 0, levelL: 0, levelR: 0 })
+export const transport = writable({ playing: false, recording: false, position: 0, levelL: 0, levelR: 0, looping: false, loopStart: 0, loopEnd: 0 })
 export const tracks = writable([])
 export const editLength = writable(0)
 export const peaks = writable({}) // clipId -> { pps, data }
 export const exportResult = writable(null)
 export const logLines = writable([])
+export const selection = writable(null) // { track, clip, id } or null
 
 export const send = (msg) => window.espresso.send(msg)
 
@@ -29,7 +30,10 @@ export function initEngineBridge () {
         recording: ev.recording,
         position: ev.position,
         levelL: ev.levelL,
-        levelR: ev.levelR
+        levelR: ev.levelR,
+        looping: ev.looping,
+        loopStart: ev.loopStart,
+        loopEnd: ev.loopEnd
       })
     } else if (ev.event === 'tracks') {
       tracks.set(ev.tracks)
@@ -38,6 +42,15 @@ export function initEngineBridge () {
       ev.tracks.forEach((t, ti) => t.clips.forEach((c, ci) => {
         if (!have[c.id]) send({ cmd: 'peaks', track: ti, clip: ci })
       }))
+      // re-anchor selection by clip id — indices shift after split/delete
+      const sel = get(selection)
+      if (sel) {
+        let found = null
+        ev.tracks.forEach((t, ti) => t.clips.forEach((c, ci) => {
+          if (c.id === sel.id) found = { track: ti, clip: ci, id: c.id }
+        }))
+        selection.set(found)
+      }
     } else if (ev.event === 'peaks') {
       peaks.update(p => ({ ...p, [ev.id]: { pps: ev.peaksPerSecond, data: ev.data } }))
     } else if (ev.event === 'exported') {

@@ -8,10 +8,18 @@
     Protocol v1.
     Transport:  {"cmd":"play"} {"cmd":"stop"} {"cmd":"record"} {"cmd":"rewind"}
                 {"cmd":"seek","seconds":N} {"cmd":"quit"}
+                {"cmd":"setLoop","start":sec,"end":sec,"on":b}  (loop-record = takes)
     Tracks:     {"cmd":"addTrack"} {"cmd":"removeTrack","track":i}
                 {"cmd":"arm","track":i,"on":b} {"cmd":"mute","track":i,"on":b}
                 {"cmd":"solo","track":i,"on":b} {"cmd":"volume","track":i,"db":N}
                 {"cmd":"pan","track":i,"value":-1..1}
+    Clips (v2): {"cmd":"moveClip","track":i,"clip":j,"start":sec}
+                {"cmd":"trimClip","track":i,"clip":j,"edge":"start"|"end","to":sec}
+                {"cmd":"splitClip","track":i,"clip":j,"at":sec}
+                {"cmd":"deleteClip","track":i,"clip":j}
+                {"cmd":"setFades","track":i,"clip":j,"fadeIn":sec,"fadeOut":sec}
+                {"cmd":"setTake","track":i,"clip":j,"take":n}
+                {"cmd":"undo"} {"cmd":"redo"}
     Data:       {"cmd":"peaks","track":i,"clip":j}
                 {"cmd":"export","format":"wav"|"flac","bitDepth":16|24|32}
     Events out: hello (on connect), state (~30 Hz), tracks (on connect and
@@ -388,6 +396,13 @@ private:
         {
             transport.setPosition (te::TimePosition::fromSeconds ((double) v.getProperty ("seconds", 0.0)));
         }
+        else if (cmd == "setLoop")
+        {
+            const auto a = te::TimePosition::fromSeconds ((double) v.getProperty ("start", 0.0));
+            const auto b = te::TimePosition::fromSeconds ((double) v.getProperty ("end", 0.0));
+            transport.setLoopRange ({ juce::jmin (a, b), juce::jmax (a, b) });
+            transport.looping = (bool) v.getProperty ("on", false);
+        }
         else if (cmd == "addTrack")
         {
             edit->ensureNumberOfAudioTracks (te::getAudioTracks (*edit).size() + 1);
@@ -433,6 +448,74 @@ private:
                 if (auto* vp = t->getVolumePlugin())
                     vp->setPan (juce::jlimit (-1.0f, 1.0f, (float) (double) v.getProperty ("value", 0.0)));
             sendTracks();
+        }
+        else if (cmd == "moveClip")
+        {
+            if (auto* c = getClip (v))
+                c->setStart (te::TimePosition::fromSeconds (juce::jmax (0.0, (double) v.getProperty ("start", 0.0))),
+                             false, true);
+            saveAndSendTracks();
+        }
+        else if (cmd == "trimClip")
+        {
+            if (auto* c = getClip (v))
+            {
+                const auto to = te::TimePosition::fromSeconds (juce::jmax (0.0, (double) v.getProperty ("to", 0.0)));
+
+                if (v.getProperty ("edge", "end").toString() == "start")
+                    c->setStart (to, true, false);
+                else
+                    c->setEnd (to, true);
+            }
+            saveAndSendTracks();
+        }
+        else if (cmd == "splitClip")
+        {
+            if (auto* c = getClip (v))
+                if (auto* ct = dynamic_cast<te::ClipTrack*> (c->getTrack()))
+                    ct->splitClip (*c, te::TimePosition::fromSeconds ((double) v.getProperty ("at", 0.0)));
+            saveAndSendTracks();
+        }
+        else if (cmd == "deleteClip")
+        {
+            if (auto* c = getClip (v))
+                c->removeFromParent();
+            saveAndSendTracks();
+        }
+        else if (cmd == "setFades")
+        {
+            if (auto* ac = dynamic_cast<te::AudioClipBase*> (getClip (v)))
+            {
+                ac->setFadeIn (te::TimeDuration::fromSeconds (juce::jmax (0.0, (double) v.getProperty ("fadeIn", 0.0))));
+                ac->setFadeOut (te::TimeDuration::fromSeconds (juce::jmax (0.0, (double) v.getProperty ("fadeOut", 0.0))));
+            }
+            saveAndSendTracks();
+        }
+        else if (cmd == "setTake")
+        {
+            // Upstream setCurrentTake assumes project-registered takes and
+            // deletes file-based ones — switch the source reference directly.
+            if (auto* wc = dynamic_cast<te::WaveAudioClip*> (getClip (v)))
+            {
+                auto takesTree = wc->state.getChildWithName (te::IDs::TAKES);
+                auto take = takesTree.getChild ((int) v.getProperty ("take", 0));
+
+                if (take.isValid() && take.hasProperty (te::IDs::source))
+                    wc->state.setProperty (te::IDs::source, take[te::IDs::source], &edit->getUndoManager());
+            }
+            saveAndSendTracks();
+            // the audible audio changed — refresh this clip's waveform
+            sendPeaks (trackIndex, (int) v.getProperty ("clip", -1));
+        }
+        else if (cmd == "undo")
+        {
+            edit->getUndoManager().undo();
+            saveAndSendTracks();
+        }
+        else if (cmd == "redo")
+        {
+            edit->getUndoManager().redo();
+            saveAndSendTracks();
         }
         else if (cmd == "peaks")
         {
@@ -480,6 +563,26 @@ private:
         sendTracks();
     }
 
+    te::Clip* getClip (const juce::var& v)
+    {
+        auto tracks = te::getAudioTracks (*edit);
+        const auto ti = (int) v.getProperty ("track", -1);
+
+        if (! juce::isPositiveAndBelow (ti, tracks.size()))
+            return nullptr;
+
+        auto clips = tracks[ti]->getClips();
+        const auto ci = (int) v.getProperty ("clip", -1);
+
+        return juce::isPositiveAndBelow (ci, clips.size()) ? clips[ci] : nullptr;
+    }
+
+    void saveAndSendTracks()
+    {
+        te::EditFileOperations (*edit).save (true, true, false);
+        sendTracks();
+    }
+
     void sendTracks()
     {
         juce::Array<juce::var> tracks;
@@ -495,11 +598,31 @@ private:
                 co->setProperty ("name", c->getName());
                 co->setProperty ("start", c->getPosition().getStart().inSeconds());
                 co->setProperty ("length", c->getPosition().getLength().inSeconds());
+                co->setProperty ("offset", c->getPosition().getOffset().inSeconds());
+
+                if (auto* ac = dynamic_cast<te::AudioClipBase*> (c))
+                {
+                    co->setProperty ("fadeIn", ac->getFadeIn().inSeconds());
+                    co->setProperty ("fadeOut", ac->getFadeOut().inSeconds());
+                }
 
                 if (auto* wc = dynamic_cast<te::WaveAudioClip*> (c))
                 {
-                    co->setProperty ("takes", std::max (1, wc->getTakes().size()));
-                    co->setProperty ("currentTake", wc->getCurrentTake());
+                    auto takesTree = wc->state.getChildWithName (te::IDs::TAKES);
+                    const auto current = wc->state[te::IDs::source].toString();
+                    int currentTake = 0;
+
+                    for (int i = 0; i < takesTree.getNumChildren(); ++i)
+                    {
+                        if (takesTree.getChild (i)[te::IDs::source].toString() == current)
+                        {
+                            currentTake = i;
+                            break;
+                        }
+                    }
+
+                    co->setProperty ("takes", std::max (1, takesTree.getNumChildren()));
+                    co->setProperty ("currentTake", currentTake);
                 }
 
                 clips.add (juce::var (co));
@@ -624,6 +747,9 @@ private:
         o->setProperty ("levelL", juce::Decibels::decibelsToGain (dbL, -100.0f));
         o->setProperty ("levelR", juce::Decibels::decibelsToGain (dbR, -100.0f));
         o->setProperty ("callbacks", (juce::int64) callbackCounter.count.load());
+        o->setProperty ("looping", transport.looping.get());
+        o->setProperty ("loopStart", transport.getLoopRange().getStart().inSeconds());
+        o->setProperty ("loopEnd", transport.getLoopRange().getEnd().inSeconds());
         server.broadcast (juce::JSON::toString (juce::var (o), true) + "\n");
     }
 

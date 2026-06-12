@@ -1,6 +1,10 @@
 <script>
   import { onDestroy } from 'svelte'
-  import { hello, transport, linkUp, exportResult, send } from '../stores.js'
+  import { hello, transport, linkUp, exportResult, selection, send } from '../stores.js'
+
+  function split () {
+    if ($selection) send({ cmd: 'splitClip', track: $selection.track, clip: $selection.clip, at: $transport.position })
+  }
 
   let showExport = false
   let toast = ''
@@ -42,6 +46,15 @@
     <button class="tbtn" on:click={() => send({ cmd: 'stop' })} title="Stop">■</button>
     <button class="tbtn play" class:active={$transport.playing} on:click={() => send({ cmd: 'play' })} title="Play">▶</button>
     <button class="tbtn rec" class:active={$transport.recording} on:click={() => send({ cmd: 'record' })} title="Record">●</button>
+    <button class="tbtn loop" class:active={$transport.looping}
+            on:click={() => send({ cmd: 'setLoop', start: $transport.loopStart, end: $transport.loopEnd, on: !$transport.looping })}
+            title="Loop (drag on ruler to set range)">⟳</button>
+  </div>
+
+  <div class="edit-cluster">
+    <button class="ebtn" title="Undo (Ctrl+Z)" on:click={() => send({ cmd: 'undo' })}>↶</button>
+    <button class="ebtn" title="Redo (Ctrl+Shift+Z)" on:click={() => send({ cmd: 'redo' })}>↷</button>
+    <button class="ebtn" title="Split at playhead (Ctrl+T)" disabled={!$selection} on:click={split}>✂</button>
   </div>
 
   <div class="lcd">
@@ -102,8 +115,22 @@
   .tbtn:hover { background: linear-gradient(#34343a, #26262b); }
   .tbtn:active { transform: translateY(1px); }
   .tbtn.play.active { color: #7dc97f; border-color: #4d7a50; box-shadow: 0 0 10px rgba(125, 201, 127, 0.3); }
+  .tbtn.loop.active { color: #e8c468; border-color: #8a702a; box-shadow: 0 0 10px rgba(232, 196, 104, 0.3); }
   .tbtn.rec { color: #c9554c; }
   .tbtn.rec.active { color: #ff4438; border-color: #8a3530; box-shadow: 0 0 10px rgba(255, 68, 56, 0.4); }
+
+  .edit-cluster { display: flex; gap: 4px; }
+  .ebtn {
+    width: 30px; height: 30px;
+    border-radius: 6px;
+    border: 1px solid #38383e;
+    background: linear-gradient(#2c2c31, #202024);
+    color: #b8b8c0;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .ebtn:hover:not(:disabled) { color: #d4a373; }
+  .ebtn:disabled { opacity: 0.35; cursor: default; }
 
   .lcd {
     background: #0d1410;

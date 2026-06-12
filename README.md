@@ -106,12 +106,21 @@ export** (24-bit) from the transport bar. The engine speaks protocol v1
 (documented at the top of `engine/src/Main.cpp`) and serves multiple
 control clients at once.
 
+## Phase 2 results (2026-06-12)
+
+The editing era: **drag clips** to move them (snap to grid, Alt to bypass),
+**trim** either edge by the clip border, **split** at the playhead (✂ /
+Ctrl+T), **delete**, **fade in/out** via draggable handles with ramp
+rendering, **loop ranges** drawn on the ruler (drag to set), **loop
+recording stacks takes** with a click-to-cycle take badge (comping v1), and
+full **undo/redo** (↶↷ / Ctrl+Z). Keyboard: Space = play/stop, R = record.
+
 ## Roadmap
 
 1. ~~Phase 0 — spike: engine ↔ UI loop, record/play/meters~~ *(done)*
-2. ~~Phase 1 — tracks, mixer, arrange view, WAV/FLAC export~~ *(done — comping UI moved to Phase 2)*
-3. Phase 2 — region editing (move/trim/split), fades, take comping, automation
-4. Phase 3 — VST3 / LV2 / CLAP hosting
+2. ~~Phase 1 — tracks, mixer, arrange view, WAV/FLAC export~~ *(done)*
+3. ~~Phase 2 — region editing, fades, loop + takes/comping, undo~~ *(done — automation lanes deferred)*
+4. Phase 3 — VST3 / LV2 / CLAP hosting, automation lanes
 5. Phase 4 — yabridge integration: Windows plugins, Melodyne
 6. Phase 4½ — the guitar shelf: built-in **Neural Amp Modeler** (headless
    [NeuralAmpModelerCore](https://github.com/sdatkinson/NeuralAmpModelerCore),
