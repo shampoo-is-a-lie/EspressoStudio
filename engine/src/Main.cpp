@@ -5,8 +5,9 @@
     single-track Edit, and exposes a newline-delimited JSON control protocol on
     localhost TCP so the Electron UI can drive transport and read meters.
 
-    Commands in:   {"cmd":"play"} {"cmd":"stop"} {"cmd":"record"} {"cmd":"quit"}
-    Events out:    {"event":"hello",...} on connect, {"event":"state",...} at ~30 Hz
+    Commands in:   {"cmd":"play"} {"cmd":"stop"} {"cmd":"record"} {"cmd":"rewind"} {"cmd":"quit"}
+    Events out:    {"event":"hello",...} on connect, {"event":"state",...} at ~30 Hz,
+                   {"event":"takes",...} on connect and after each recording
 */
 
 #include <JuceHeader.h>
@@ -290,7 +291,10 @@ private:
             transport.stop (false, false);
 
             if (wasRecording)
+            {
                 te::EditFileOperations (*edit).save (true, true, false);
+                sendTakesInfo();
+            }
         }
         else if (cmd == "record")
         {
@@ -298,11 +302,16 @@ private:
             {
                 transport.stop (false, false);
                 te::EditFileOperations (*edit).save (true, true, false);
+                sendTakesInfo();
             }
             else
             {
                 transport.record (false);
             }
+        }
+        else if (cmd == "rewind")
+        {
+            transport.setPosition (te::TimePosition());
         }
         else if (cmd == "status")
         {
@@ -332,6 +341,36 @@ private:
         if (latencySecs <= 0.0)  // pipewire-jack reports 0; estimate one period
             latencySecs = dev->getCurrentBufferSizeSamples() / dev->getCurrentSampleRate();
         o->setProperty ("latencyMs", latencySecs * 1000.0);
+        server.broadcast (juce::JSON::toString (juce::var (o), true) + "\n");
+
+        sendTakesInfo();
+    }
+
+    void sendTakesInfo()
+    {
+        juce::Array<juce::var> tracks;
+
+        for (auto t : te::getAudioTracks (*edit))
+        {
+            auto clips = t->getClips();
+
+            if (clips.isEmpty())
+                continue;
+
+            double length = 0;
+            for (auto* c : clips)
+                length = std::max (length, c->getPosition().getEnd().inSeconds());
+
+            auto* to = new juce::DynamicObject();
+            to->setProperty ("track", t->getName());
+            to->setProperty ("clips", clips.size());
+            to->setProperty ("length", length);
+            tracks.add (juce::var (to));
+        }
+
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("event", "takes");
+        o->setProperty ("tracks", tracks);
         server.broadcast (juce::JSON::toString (juce::var (o), true) + "\n");
     }
 

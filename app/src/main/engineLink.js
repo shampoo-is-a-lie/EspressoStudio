@@ -67,7 +67,10 @@ export class EngineLink extends EventEmitter {
     this.child.stdout.on('data', d => this.emit('log', d.toString()))
     this.child.stderr.on('data', d => this.emit('log', d.toString()))
     this.child.on('exit', code => {
-      this.emit('log', `engine exited with code ${code}\n`)
+      // The default command is the engine-ctl launcher, which exits once the
+      // engine is daemonized — only a non-zero exit is noteworthy.
+      this.emit('log', code === 0 ? 'engine launcher done (engine running detached)\n'
+                                  : `engine launcher failed with code ${code}\n`)
       this.child = null
     })
   }

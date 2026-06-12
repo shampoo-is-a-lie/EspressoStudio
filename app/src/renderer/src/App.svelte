@@ -9,6 +9,7 @@
   let sampleRate = 0
   let bufferSize = 0
   let latencyMs = 0
+  let takes = []
   let logLines = []
 
   window.espresso.onLink(({ up }) => { linkUp = up })
@@ -18,6 +19,8 @@
       sampleRate = ev.sampleRate
       bufferSize = ev.bufferSize
       latencyMs = ev.latencyMs
+    } else if (ev.event === 'takes') {
+      takes = ev.tracks
     } else if (ev.event === 'state') {
       playing = ev.playing
       recording = ev.recording
@@ -66,6 +69,7 @@
     </div>
 
     <div class="transport">
+      <button class="tbtn small" on:click={() => send('rewind')} title="Rewind to start">⏮</button>
       <button class="tbtn" on:click={() => send('stop')} title="Stop">■</button>
       <button class="tbtn play" class:active={playing} on:click={() => send('play')} title="Play">▶</button>
       <button class="tbtn rec" class:active={recording} on:click={() => send('record')} title="Record">●</button>
@@ -80,6 +84,15 @@
           </div>
         </div>
       {/each}
+      <div class="takes">
+        {#if takes.length === 0}
+          <span class="takes-empty">no takes yet — hit ● and make some noise</span>
+        {:else}
+          {#each takes as t}
+            <span class="take-chip">{t.track} ▸ {t.clips} take{t.clips > 1 ? 's' : ''} · {t.length.toFixed(1)}s</span>
+          {/each}
+        {/if}
+      </div>
     </div>
   </section>
 
@@ -155,6 +168,7 @@
     cursor: pointer;
     box-shadow: 0 3px 8px rgba(0,0,0,0.5);
   }
+  .tbtn.small { width: 44px; height: 44px; font-size: 15px; align-self: center; }
   .tbtn:hover { background: linear-gradient(#34343a, #26262b); }
   .tbtn:active { transform: translateY(1px); }
   .tbtn.play.active { color: #7dc97f; border-color: #4d7a50; box-shadow: 0 0 14px rgba(125, 201, 127, 0.3); }
@@ -175,6 +189,18 @@
     height: 100%;
     background: linear-gradient(90deg, #4d7a50, #7dc97f 60%, #e8c468 85%, #e06c60);
     transition: width 40ms linear;
+  }
+
+  .takes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .takes-empty { font-size: 11px; color: #5a5a62; font-style: italic; }
+  .take-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #9fe2b0;
+    background: #15211a;
+    border: 1px solid #2c4434;
+    border-radius: 10px;
+    padding: 2px 8px;
   }
 
   .log {
