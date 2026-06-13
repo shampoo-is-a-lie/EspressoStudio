@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import path from 'path'
 import { EngineLink } from './engineLink.js'
 
@@ -42,6 +42,17 @@ app.whenReady().then(() => {
   engine.start()
 
   ipcMain.on('engine:cmd', (_e, msg) => engine.send(msg))
+
+  // Native file picker for guitar-rig assets (.nam captures, IR files). Returns
+  // the chosen absolute path, or null if cancelled.
+  ipcMain.handle('dialog:openFile', async (_e, opts = {}) => {
+    const res = await dialog.showOpenDialog(win, {
+      title: opts.title ?? 'Choose file',
+      properties: ['openFile'],
+      filters: opts.filters ?? []
+    })
+    return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
+  })
 })
 
 app.on('before-quit', () => { if (engine) engine.stop() })

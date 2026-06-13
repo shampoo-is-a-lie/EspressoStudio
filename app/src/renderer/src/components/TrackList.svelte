@@ -1,5 +1,5 @@
 <script>
-  import { tracks, fxTrack, send } from '../stores.js'
+  import { tracks, fxTrack, rigTrack, send } from '../stores.js'
 
   export const ROW = 72
 </script>
@@ -18,6 +18,8 @@
         <button class="tgl solo" class:on={t.solo} title="Solo" on:click={() => send({ cmd: 'solo', track: i, on: !t.solo })}>S</button>
         <button class="tgl fx" class:on={$fxTrack === i || (t.plugins ?? []).some(p => p.external)}
                 title="FX chain" on:click={() => fxTrack.set($fxTrack === i ? null : i)}>fx</button>
+        <button class="tgl rig" class:on={$rigTrack === i || (t.plugins ?? []).some(p => p.type === 'espressoNamAmp')}
+                title="Guitar rig" on:click={() => rigTrack.set($rigTrack === i ? null : i)}>rig</button>
         <input class="pan" type="range" min="-1" max="1" step="0.05" title="Pan"
                value={t.pan ?? 0} on:input={(e) => send({ cmd: 'pan', track: i, value: +e.target.value })} />
       </div>
@@ -78,6 +80,8 @@
   .tgl.solo.on { background: #1f4a52; border-color: #2e6e7a; color: #6ecbdc; }
   .tgl.fx { width: 24px; font-size: 8px; }
   .tgl.fx.on { background: #4a3a1f; border-color: #8a702a; color: #e8c468; }
+  .tgl.rig { width: 26px; font-size: 8px; }
+  .tgl.rig.on { background: #3a2a16; border-color: var(--es-accent-deep); color: var(--es-accent); }
   .pan { flex: 1; height: 14px; accent-color: #8a8a92; }
 
   .row3 { display: flex; align-items: center; gap: 6px; }

@@ -1,0 +1,79 @@
+/*
+  EspressoStudio design tokens — the single source of truth for colour, type,
+  spacing and the "device" materials used by custom built-in features (the
+  guitar rig amp/cab). New components reference these via var(--es-*); never
+  hard-code palette values, so theming stays centralised.
+*/
+
+:root {
+  /* ---- surfaces ---- */
+  --es-bg: #161618;
+  --es-surface-1: #1b1b1e;
+  --es-surface-2: #1d1d21;
+  --es-surface-3: #222226;
+  --es-surface-4: #232327;
+  --es-inset: #141416;
+
+  /* ---- text ---- */
+  --es-text: #d8d8dc;
+  --es-text-2: #c9c9cf;
+  --es-text-muted: #8a8a92;
+  --es-text-dim: #5a5a62;
+  --es-text-faint: #55555c;
+
+  /* ---- brand & accents ---- */
+  --es-accent: #d4a373;        /* espresso crema — primary brand */
+  --es-accent-deep: #b07d4e;
+  --es-teal: #6ecbdc;
+  --es-amber: #e8c468;
+  --es-green: #7dc97f;
+  --es-danger: #e06c60;
+
+  /* ---- lines & borders ---- */
+  --es-hairline: #0c0c0e;
+  --es-edge: #000;
+  --es-border: #2e2e34;
+  --es-border-2: #38383e;
+
+  /* ---- radius ---- */
+  --es-r-sm: 4px;
+  --es-r: 6px;
+  --es-r-lg: 10px;
+  --es-r-xl: 16px;
+
+  /* ---- space ---- */
+  --es-sp-1: 4px;
+  --es-sp-2: 8px;
+  --es-sp-3: 12px;
+  --es-sp-4: 16px;
+  --es-sp-5: 24px;
+
+  /* ---- type ---- */
+  --es-font: 'Inter', 'Cantarell', system-ui, sans-serif;
+  --es-mono: 'JetBrains Mono', monospace;
+
+  /* ---- elevation ---- */
+  --es-shadow-1: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --es-shadow-2: 0 -10px 34px rgba(0, 0, 0, 0.55);
+
+  /* ---- device materials (guitar rig) ---- */
+  /* amp head tolex — dark grained vinyl */
+  --es-amp-tolex:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.014) 0 2px, transparent 2px 4px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.28) 0 2px, transparent 2px 4px),
+    linear-gradient(160deg, #2c2722, #1a1714);
+  /* control-panel face — brushed warm metal */
+  --es-amp-panel:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #3a342e, #2a2521);
+  /* speaker grille cloth — woven dots */
+  --es-cab-grille:
+    radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.5) 1px, transparent 1.7px) 0 0 / 5px 5px,
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.045) 1px, transparent 1.7px) 2px 2px / 5px 5px,
+    linear-gradient(160deg, #251f15, #14110b);
+  /* engraved nameplate */
+  --es-nameplate: linear-gradient(180deg, #0d0a07, #1c1611);
+  /* metal knob cap */
+  --es-knob-face: radial-gradient(circle at 38% 30%, #5d5750, #2c2925 62%, #191714);
+  --es-knob-edge: #100d0a;
+}

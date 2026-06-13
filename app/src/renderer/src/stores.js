@@ -11,6 +11,7 @@ export const logLines = writable([])
 export const selection = writable(null) // { track, clip, id } or null
 export const knownPlugins = writable({ scanning: false, plugins: [] })
 export const fxTrack = writable(null) // track index whose FX panel is open
+export const rigTrack = writable(null) // track index whose guitar rig is open
 
 export const send = (msg) => window.espresso.send(msg)
 

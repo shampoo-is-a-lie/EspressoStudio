@@ -3,6 +3,7 @@ dist/
 out/
 engine/build/
 engine/libs/tracktion_engine/
+engine/libs/NeuralAmpModelerCore/
 spike-session/
 session/
 exports/

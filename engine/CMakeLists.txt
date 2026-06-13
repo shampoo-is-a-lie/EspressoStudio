@@ -10,7 +10,22 @@ juce_generate_juce_header(EspressoEngine)
 
 target_compile_features(EspressoEngine PRIVATE cxx_std_20)
 
-target_sources(EspressoEngine PRIVATE src/Main.cpp)
+# --- Neural Amp Modeler core (MIT) — compiled straight into the engine ---
+set(NAM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/NeuralAmpModelerCore)
+file(GLOB NAM_SOURCES
+    ${NAM_DIR}/NAM/*.cpp
+    ${NAM_DIR}/NAM/wavenet/*.cpp)
+
+target_sources(EspressoEngine PRIVATE src/Main.cpp src/NamAmpPlugin.cpp ${NAM_SOURCES})
+
+target_include_directories(EspressoEngine PRIVATE
+    ${NAM_DIR}
+    ${NAM_DIR}/NAM
+    ${NAM_DIR}/Dependencies/eigen
+    ${NAM_DIR}/Dependencies/nlohmann)
+
+# NAM's A2 fast-path WaveNet (matches the upstream default build)
+target_compile_definitions(EspressoEngine PRIVATE NAM_ENABLE_A2_FAST=1)
 
 target_compile_definitions(EspressoEngine PRIVATE
     JUCE_JACK=1
