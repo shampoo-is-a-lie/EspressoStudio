@@ -24,6 +24,12 @@
                 {"cmd":"removePlugin","track":i,"plugin":j}
                 {"cmd":"setPluginEnabled","track":i,"plugin":j,"on":b}
                 {"cmd":"showPluginEditor","track":i,"plugin":j}
+    Guitar rig: {"cmd":"addGuitarRig","track":i}  (inserts Neural Amp + IR cab)
+    (v4½)       {"cmd":"loadAmpModel","track":i,"plugin":j,"path":".nam file"}
+                {"cmd":"loadCabIR","track":i,"plugin":j,"path":"IR wav/flac"}
+                {"cmd":"setPluginParam","track":i,"plugin":j,"param":id,"value":N}
+                  amp params: inputGain, outputGain (dB);
+                  cab params: gain (dB), mix (0..1)
     Data:       {"cmd":"peaks","track":i,"clip":j}
                 {"cmd":"export","format":"wav"|"flac","bitDepth":16|24|32}
     Events out: hello (on connect), state (~30 Hz), tracks (on connect and
@@ -33,6 +39,8 @@
 #include <JuceHeader.h>
 
 #include <sys/resource.h>
+
+#include "NamAmpPlugin.h"
 
 namespace te = tracktion;
 
@@ -249,6 +257,13 @@ class EspressoApp : private juce::Timer
 public:
     bool initialise()
     {
+        // Register EspressoStudio's first-class guitar-rig plugins as Tracktion
+        // internal types: our Neural Amp Modeler, plus Tracktion's built-in IR
+        // loader (used as the cabinet). Both then route/automate/persist
+        // natively while the app renders the custom rig UI on top of them.
+        engine.getPluginManager().createBuiltInType<NamAmpPlugin>();
+        engine.getPluginManager().createBuiltInType<te::ImpulseResponsePlugin>();
+
         te::EditPlaybackContext::setThreadPoolStrategy (
             static_cast<int> (tracktion::graph::ThreadPoolStrategy::conditionVariable));
         auto& dm = engine.getDeviceManager();
@@ -592,6 +607,40 @@ private:
                 editorWindows.add (new PluginEditorWindow (*ep));
             }
         }
+        else if (cmd == "addGuitarRig")
+        {
+            // The first-class rig: a Neural Amp followed by an IR cabinet.
+            if (auto* t = getTrack())
+            {
+                insertInternalPlugin (*t, NamAmpPlugin::xmlTypeName);
+                insertInternalPlugin (*t, te::ImpulseResponsePlugin::xmlTypeName);
+            }
+            saveAndSendTracks();
+        }
+        else if (cmd == "loadAmpModel")
+        {
+            if (auto* nam = dynamic_cast<NamAmpPlugin*> (getTrackPlugin (v)))
+                nam->loadModel (juce::File (v.getProperty ("path", "").toString()));
+            saveAndSendTracks();
+        }
+        else if (cmd == "loadCabIR")
+        {
+            if (auto* ir = dynamic_cast<te::ImpulseResponsePlugin*> (getTrackPlugin (v)))
+            {
+                const juce::File f (v.getProperty ("path", "").toString());
+
+                if (ir->loadImpulseResponse (f))
+                    ir->name = f.getFileNameWithoutExtension();
+            }
+            saveAndSendTracks();
+        }
+        else if (cmd == "setPluginParam")
+        {
+            if (auto* p = getTrackPlugin (v))
+                if (auto param = p->getAutomatableParameterByID (v.getProperty ("param", "").toString()))
+                    param->setParameter ((float) (double) v.getProperty ("value", 0.0), juce::sendNotification);
+            saveAndSendTracks();
+        }
         else if (cmd == "peaks")
         {
             sendPeaks (trackIndex, (int) v.getProperty ("clip", -1));
@@ -744,6 +793,34 @@ private:
         server.broadcast (juce::JSON::toString (juce::var (o), true) + "\n");
     }
 
+    // The index just before a track's built-in volume/meter tail — where new
+    // user plugins belong, so they process ahead of the channel strip.
+    static int tailInsertIndex (te::AudioTrack& t)
+    {
+        int idx = 0;
+
+        for (auto p : t.pluginList)
+        {
+            if (dynamic_cast<te::VolumeAndPanPlugin*> (p) != nullptr
+                 || dynamic_cast<te::LevelMeterPlugin*> (p) != nullptr)
+                break;
+            ++idx;
+        }
+
+        return idx;
+    }
+
+    te::Plugin::Ptr insertInternalPlugin (te::AudioTrack& t, const juce::String& type)
+    {
+        if (auto plugin = edit->getPluginCache().createNewPlugin (type, {}))
+        {
+            t.pluginList.insertPlugin (plugin, tailInsertIndex (t), nullptr);
+            return plugin;
+        }
+
+        return {};
+    }
+
     void addPlugin (const juce::var& v)
     {
         const auto ident = v.getProperty ("ident", "").toString();
@@ -757,21 +834,7 @@ private:
                 if (d.createIdentifierString() == ident)
                 {
                     if (auto plugin = edit->getPluginCache().createNewPlugin (te::ExternalPlugin::xmlTypeName, d))
-                    {
-                        // insert before the built-in volume/meter tail
-                        auto& list = tracks[ti]->pluginList;
-                        int idx = 0;
-
-                        for (auto p : list)
-                        {
-                            if (dynamic_cast<te::VolumeAndPanPlugin*> (p) != nullptr
-                                 || dynamic_cast<te::LevelMeterPlugin*> (p) != nullptr)
-                                break;
-                            ++idx;
-                        }
-
-                        list.insertPlugin (plugin, idx, nullptr);
-                    }
+                        tracks[ti]->pluginList.insertPlugin (plugin, tailInsertIndex (*tracks[ti]), nullptr);
 
                     break;
                 }
@@ -832,8 +895,27 @@ private:
             {
                 auto* po = new juce::DynamicObject();
                 po->setProperty ("name", p->getName());
+                po->setProperty ("type", p->getPluginType());
                 po->setProperty ("enabled", p->isEnabled());
                 po->setProperty ("external", dynamic_cast<te::ExternalPlugin*> (p) != nullptr);
+
+                // Guitar-rig plugins carry extra state so the app can render the
+                // custom amp/cab UI without a second round-trip.
+                if (auto* nam = dynamic_cast<NamAmpPlugin*> (p))
+                {
+                    po->setProperty ("modelName", nam->getModelDisplayName());
+                    po->setProperty ("modelLoaded", nam->hasModelLoaded());
+                    po->setProperty ("inputDb", nam->inputGainParam->getCurrentValue());
+                    po->setProperty ("outputDb", nam->outputGainParam->getCurrentValue());
+                }
+                else if (auto* ir = dynamic_cast<te::ImpulseResponsePlugin*> (p))
+                {
+                    po->setProperty ("irName", ir->name.get());
+                    po->setProperty ("irLoaded", ir->state.hasProperty (te::IDs::irFileData));
+                    po->setProperty ("cabGainDb", ir->gainParam->getCurrentValue());
+                    po->setProperty ("cabMix", ir->mixParam->getCurrentValue());
+                }
+
                 plugins.add (juce::var (po));
             }
 

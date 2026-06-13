@@ -65,6 +65,10 @@ git -c url."https://github.com/".insteadOf="git@github.com:" \
     clone --depth 1 --recurse-submodules --shallow-submodules \
     https://github.com/Tracktion/tracktion_engine.git engine/libs/tracktion_engine
 
+# fetch Neural Amp Modeler core for the guitar rig (Eigen + AudioDSPTools submodules)
+git clone --depth 1 --recurse-submodules --shallow-submodules \
+    https://github.com/sdatkinson/NeuralAmpModelerCore.git engine/libs/NeuralAmpModelerCore
+
 # two one-character patches for GCC 16 / new libstdc++ (see CLAUDE.md):
 #   nanorange.hpp ~17108:  y.value  →  y.value_
 #   choc_SampleBuffers.h:  add  #include <cstdint>

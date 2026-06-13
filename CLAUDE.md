@@ -24,6 +24,9 @@ top of `engine/src/Main.cpp`).
 - `engine/libs/tracktion_engine` is a plain shallow clone, gitignored (not a
   submodule — upstream's JUCE submodule URL is SSH-only, needs the
   `url.insteadOf` rewrite from README.md).
+- `engine/libs/NeuralAmpModelerCore` is likewise a gitignored clone (the guitar
+  rig's NAM amp DSP); clone it `--recurse-submodules` for its Eigen +
+  AudioDSPTools deps. CMakeLists compiles it straight into the engine.
 - Local patches needed after a fresh Tracktion clone (GCC 16 / new libstdc++):
   - `modules/3rd_party/nanorange/nanorange.hpp` ~line 17108: `y.value` →
     `y.value_` (uninstantiated-template-body error, `-Wtemplate-body`).
