@@ -636,10 +636,12 @@ private:
         }
         else if (cmd == "setPluginParam")
         {
+            // Like volume/pan: don't write the edit file on every knob move —
+            // the value lives in the plugin state and persists on the next save.
             if (auto* p = getTrackPlugin (v))
                 if (auto param = p->getAutomatableParameterByID (v.getProperty ("param", "").toString()))
                     param->setParameter ((float) (double) v.getProperty ("value", 0.0), juce::sendNotification);
-            saveAndSendTracks();
+            sendTracks();
         }
         else if (cmd == "peaks")
         {
